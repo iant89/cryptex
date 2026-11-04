@@ -5,8 +5,13 @@
  */
 import type { Tone } from '@enterprise-ui/react';
 
-export type AssetCode = 'BTC' | 'ETH' | 'USDT' | 'USDC' | 'SOL' | 'LTC' | 'XRP' | 'DOGE';
-export const ASSET_DECIMALS: Record<AssetCode, number> = { BTC: 8, ETH: 18, USDT: 6, USDC: 6, SOL: 9, LTC: 8, XRP: 6, DOGE: 8 };
+import { ASSETS, type AssetCode } from '../../models/asset';
+
+export type { AssetCode };
+/** Decimals come from the domain asset model (Batch 5). */
+export const ASSET_DECIMALS: Readonly<Record<AssetCode, number>> = Object.fromEntries(
+  Object.values(ASSETS).map((a) => [a.code, a.decimals]),
+) as Record<AssetCode, number>;
 
 /** USD with 8 decimal places, e.g. 1 USD = 100_000_000n. */
 export type Usd8 = bigint;
