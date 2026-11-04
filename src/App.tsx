@@ -1,9 +1,13 @@
-/** Placeholder only. The app shell is built in Batch 2 after mockup approval. */
+import { RouterProvider, createBrowserRouter } from 'react-router';
+import { AppProviders } from './app/providers/AppProviders';
+import { routes } from './app/routes';
+
+const router = createBrowserRouter(routes);
+
 export function App() {
   return (
-    <main>
-      <h1>Cryptex</h1>
-      <p>Simulation only. No real funds, wallets, or networks.</p>
-    </main>
+    <AppProviders>
+      <RouterProvider router={router} />
+    </AppProviders>
   );
 }
