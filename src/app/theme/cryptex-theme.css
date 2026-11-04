@@ -1,0 +1,64 @@
+/*
+ * Cryptex theme: overrides ENTERPRISE-UI --eui-* tokens on top of the built-in
+ * dark/light themes (never patches the vendored package).
+ * Amber accent #F59E0B approved by Ian (design/mockups/LAYOUT-SPEC.md).
+ * This is the ONLY file in src/ allowed to contain literal colors.
+ */
+[data-eui-theme='dark'] {
+  --eui-color-primary: #f59e0b;
+  --eui-color-primary-hover: #fbb43a;
+  --eui-color-primary-active: #d97706;
+  --eui-color-on-primary: #1c1917;
+  --eui-color-primary-subtle: rgba(245, 158, 11, 0.16);
+  --eui-color-primary-subtle-hover: rgba(245, 158, 11, 0.24);
+  --eui-color-surface-selected: rgba(245, 158, 11, 0.12);
+  --eui-color-surface-selected-hover: rgba(245, 158, 11, 0.18);
+  --eui-color-selected-text: #fbbf24;
+  --eui-color-focus: #f59e0b;
+}
+
+/* Light: #F59E0B is used for fills only (2.15:1 on white); text uses #B45309. */
+[data-eui-theme='light'] {
+  --eui-color-primary: #f59e0b;
+  --eui-color-primary-hover: #d97706;
+  --eui-color-primary-active: #b45309;
+  --eui-color-on-primary: #1c1917;
+  --eui-color-primary-subtle: #fef3c7;
+  --eui-color-primary-subtle-hover: #fde68a;
+  --eui-color-surface-selected: #fffbeb;
+  --eui-color-surface-selected-hover: #fef3c7;
+  --eui-color-selected-text: #b45309;
+  --eui-color-focus: #b45309;
+}
+
+/*
+ * Semantic transaction status colors (SPEC: confirmed / pending / failed / warning).
+ * Aliases of EUI status tokens so both themes stay AA (checked in theme.test.ts).
+ */
+[data-eui-theme] {
+  --cx-status-confirmed: var(--eui-color-success);
+  --cx-status-confirmed-text: var(--eui-color-success-text);
+  --cx-status-confirmed-subtle: var(--eui-color-success-subtle);
+  --cx-status-pending: var(--eui-color-info);
+  --cx-status-pending-text: var(--eui-color-info-text);
+  --cx-status-pending-subtle: var(--eui-color-info-subtle);
+  --cx-status-failed: var(--eui-color-error);
+  --cx-status-failed-text: var(--eui-color-error-text);
+  --cx-status-failed-subtle: var(--eui-color-error-subtle);
+  --cx-status-warning: var(--eui-color-warning);
+  --cx-status-warning-text: var(--eui-color-warning-text);
+  --cx-status-warning-subtle: var(--eui-color-warning-subtle);
+}
+
+/*
+ * ENTERPRISE-UI uses --eui-color-primary as text for secondary/tertiary
+ * buttons and the selected tab. On light, amber text fails AA, so these use
+ * selected-text (#B45309) instead (LAYOUT-SPEC rule; pending Ian's confirmation).
+ */
+[data-eui-theme='light'] .eui-Button-secondary:not(.eui-Button-neutral),
+[data-eui-theme='light'] .eui-Button-tertiary:not(.eui-Button-neutral) {
+  --_fg: var(--eui-color-selected-text);
+  --_fg-hover: var(--eui-color-selected-text);
+  --_border: var(--eui-color-selected-text);
+}
+[data-eui-theme='light'] .eui-Tabs-tab[aria-selected='true'] { color: var(--eui-color-selected-text); }
