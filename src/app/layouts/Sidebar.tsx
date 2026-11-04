@@ -22,7 +22,7 @@ export function Sidebar() {
         void navigate(item.path);
       }}
       footer={
-        <div className="cx-sidenav-footer">
+        <li className="cx-sidenav-footer">
         <Button
           variant="tertiary"
           size="sm"
@@ -35,7 +35,7 @@ export function Sidebar() {
           {collapsed ? null : 'Collapse'}
         </Button>
           {collapsed ? null : <span className="cx-muted cx-sim-note">Simulation only</span>}
-        </div>
+        </li>
       }
     >
       {NAV_GROUPS.map((g) => (
