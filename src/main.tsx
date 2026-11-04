@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import '@enterprise-ui/react/styles.css';
 import './app/theme/cryptex-theme.css';
 import './app/shell.css';
+import './components/flow-diagram/flow-diagram.css';
 import { App } from './App';
 
 const root = document.getElementById('root');

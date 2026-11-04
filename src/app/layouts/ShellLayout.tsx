@@ -1,11 +1,12 @@
 import { AppShell } from '@enterprise-ui/react';
-import { Outlet } from 'react-router';
+import { Outlet, useLocation } from 'react-router';
 import { AppHeader } from './AppHeader';
 import { Sidebar } from './Sidebar';
 import { ActivityPanel } from './ActivityPanel';
-import { useActivityPanel } from '../providers/ActivityPanelContext';
+import { ActivityPanelProvider, useActivityPanel } from '../providers/ActivityPanelContext';
+import { HOME_PATH } from '../navigation';
 
-export function ShellLayout() {
+function ShellFrame() {
   const activity = useActivityPanel();
   return (
     <AppShell className="cx-shell" header={<AppHeader />} navigation={<Sidebar />} defaultNavCollapsed={false}>
@@ -16,5 +17,14 @@ export function ShellLayout() {
         {activity.open ? <ActivityPanel /> : null}
       </div>
     </AppShell>
+  );
+}
+
+export function ShellLayout() {
+  const { pathname } = useLocation();
+  return (
+    <ActivityPanelProvider scope={pathname === HOME_PATH ? 'dashboard' : 'page'}>
+      <ShellFrame />
+    </ActivityPanelProvider>
   );
 }
