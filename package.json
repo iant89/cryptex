@@ -4,7 +4,9 @@
   "version": "0.0.0",
   "description": "Cryptex — simulated cryptocurrency exchange operations (simulation only).",
   "type": "module",
-  "engines": { "node": ">=22.12" },
+  "engines": {
+    "node": ">=22.12"
+  },
   "scripts": {
     "dev": "vite",
     "build": "tsc -p tsconfig.json --noEmit && vite build",
@@ -16,6 +18,7 @@
   },
   "dependencies": {
     "@enterprise-ui/react": "file:vendor/enterprise-ui-react-0.1.0-64fcbd0.tgz",
+    "idb": "^8.0.4",
     "react": "^19.3.1",
     "react-dom": "^19.3.1"
   },
@@ -29,6 +32,8 @@
     "@vitejs/plugin-react": "^6.1.2",
     "eslint": "^10.14.0",
     "eslint-plugin-react-hooks": "^7.1.1",
+    "fake-indexeddb": "^6.2.7",
+    "fast-check": "^4.10.2",
     "globals": "^17.0.0",
     "jsdom": "^29.1.1",
     "typescript": "~6.0.2",
