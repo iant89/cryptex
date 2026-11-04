@@ -53,14 +53,25 @@ export type LedgerErrorCode =
   | 'MISSING_SOURCE_EVENT'
   | 'UNKNOWN_TRANSACTION'
   | 'ALREADY_REVERSED'
-  | 'SOURCE_EVENT_CONFLICT';
+  | 'SOURCE_EVENT_CONFLICT'
+  | 'INSUFFICIENT_CUSTOMER_BALANCE'
+  | 'CORRUPT_HISTORY';
+
+export interface LedgerErrorDetails {
+  readonly accountId?: string;
+  readonly asset?: AssetCode;
+  /** For INSUFFICIENT_CUSTOMER_BALANCE: how far below zero the account would go (> 0). */
+  readonly shortfall?: bigint;
+}
 
 export class LedgerError extends Error {
   readonly code: LedgerErrorCode;
-  constructor(code: LedgerErrorCode, message: string) {
+  readonly details: LedgerErrorDetails;
+  constructor(code: LedgerErrorCode, message: string, details: LedgerErrorDetails = {}) {
     super(`${code}: ${message}`);
     this.name = 'LedgerError';
     this.code = code;
+    this.details = details;
   }
 }
 
@@ -138,8 +149,18 @@ export class Ledger {
 
   constructor(deps: LedgerDeps, history: readonly JournalTransaction[] = []) {
     this.#deps = deps;
+    // Replay persisted history. Structural problems (unbalanced, duplicate id or
+    // sourceEventId, out-of-order sequence) are rejected; customer overdrafts in
+    // loaded history are left for reconcile() to report, never silently fixed.
     for (const tx of history) {
       validateDraft(tx);
+      if (this.#byId.has(tx.id)) throw new LedgerError('CORRUPT_HISTORY', `duplicate transaction id ${tx.id}`);
+      if (this.#bySource.has(tx.sourceEventId)) {
+        throw new LedgerError('CORRUPT_HISTORY', `duplicate sourceEventId ${tx.sourceEventId}`);
+      }
+      if (tx.sequence !== this.#txs.length) {
+        throw new LedgerError('CORRUPT_HISTORY', `${tx.id} has sequence ${tx.sequence}, expected ${this.#txs.length}`);
+      }
       this.#append(freezeTx(tx));
     }
   }
@@ -158,13 +179,17 @@ export class Ledger {
       return { transaction: existing, duplicate: true };
     }
     validateDraft(draft);
+    this.#assertNoCustomerOverdraft(draft);
     return { transaction: this.#commit(draft), duplicate: false };
   }
 
   /** Correct a transaction by posting its mirror image. The original is never edited. */
   reverse(transactionId: TransactionId | string, sourceEventId: EventId | string, memo?: string): PostResult {
     const existing = this.#bySource.get(sourceEventId);
-    if (existing && existing.reversesTransactionId === transactionId) return { transaction: existing, duplicate: true };
+    if (existing) {
+      if (existing.reversesTransactionId === transactionId) return { transaction: existing, duplicate: true };
+      throw new LedgerError('SOURCE_EVENT_CONFLICT', `${sourceEventId} already used`);
+    }
     const original = this.#byId.get(transactionId);
     if (!original) throw new LedgerError('UNKNOWN_TRANSACTION', transactionId);
     if (this.#reversedBy.has(transactionId)) throw new LedgerError('ALREADY_REVERSED', transactionId);
@@ -175,9 +200,35 @@ export class Ledger {
       memo: memo ?? `Reversal of ${original.id}`,
       entries: original.entries.map((e) => ({ ...e, side: e.side === 'debit' ? 'credit' : 'debit' })),
     };
-    if (existing) throw new LedgerError('SOURCE_EVENT_CONFLICT', `${sourceEventId} already used`);
     validateDraft(draft);
+    this.#assertNoCustomerOverdraft(draft);
     return { transaction: this.#commit(draft, original.id), duplicate: false };
+  }
+
+  /**
+   * Customer liability accounts (available and reserved) may never go below
+   * zero. Computes each touched account's post-transaction balance and rejects
+   * the whole draft if any would be negative.
+   */
+  #assertNoCustomerOverdraft(draft: JournalTransactionDraft): void {
+    const delta = new Map<string, { accountId: string; asset: AssetCode; units: bigint }>();
+    for (const e of draft.entries) {
+      if (parseAccount(e.accountId).category !== 'customer-liability') continue;
+      const k = balanceKey(e.accountId, e.asset);
+      const d = delta.get(k) ?? { accountId: e.accountId, asset: e.asset, units: 0n };
+      d.units += signedEffect(e);
+      delta.set(k, d);
+    }
+    for (const [k, d] of delta) {
+      const after = (this.#cache.get(k) ?? 0n) + d.units;
+      if (after < 0n) {
+        throw new LedgerError('INSUFFICIENT_CUSTOMER_BALANCE', `${d.accountId} ${d.asset} short by ${-after}`, {
+          accountId: d.accountId,
+          asset: d.asset,
+          shortfall: -after,
+        });
+      }
+    }
   }
 
   #commit(draft: JournalTransactionDraft, reverses?: TransactionId): JournalTransaction {

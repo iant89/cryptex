@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { parseAmount, type AssetCode } from '../../models';
 import { makeLedger } from '../../test/fixtures';
 import { Accounts } from './accounts';
-import { balanceKey, type JournalTransaction } from './journal';
+import { Ledger, balanceKey, type JournalTransaction } from './journal';
 import * as P from './postings';
 import { reconcile } from './reconcile';
 
@@ -84,11 +84,49 @@ describe('reconcile', () => {
     expect(reconcile({ transactions: [...ledger.transactions()], chainBalances: chain }).ok).toBe(true);
   });
 
-  it('flags negative customer balances', () => {
-    const { ledger } = makeLedger();
-    ledger.post(P.reserveWithdrawal({ sourceEventId: 'w' }, 'c1', btc('1')));
+  it('still flags customer overdrafts present in loaded history (backstop)', () => {
+    const { clock, ids } = makeLedger();
+    const { ledger: src } = makeLedger();
+    src.post(P.deposit({ sourceEventId: 'd' }, 'c1', H, btc('1')));
+    const [dep] = src.transactions();
+    // Hand-built persisted history in which the customer was overdrawn.
+    const overdraft: JournalTransaction = {
+      ...dep!, id: 'tx-od' as JournalTransaction['id'], sourceEventId: 'od', sequence: 1, kind: 'withdrawal-reserve',
+      entries: [
+        { accountId: Accounts.customerAvailable('c1'), asset: 'BTC', side: 'debit', units: btc('3').units },
+        { accountId: Accounts.customerReserved('c1'), asset: 'BTC', side: 'credit', units: btc('3').units },
+      ],
+    };
+    const ledger = new Ledger({ clock, ids }, [dep!, overdraft]);
     const r = reconcile({ transactions: [...ledger.transactions()] });
-    expect(r.discrepancies).toEqual([expect.objectContaining({ kind: 'negative-customer-balance', accountId: Accounts.customerAvailable('c1') })]);
+    expect(r.discrepancies).toEqual([expect.objectContaining({ kind: 'negative-customer-balance', accountId: Accounts.customerAvailable('c1'), difference: -btc('2').units })]);
+    expect(ledger.size).toBe(2);
+  });
+
+  it('surfaces the conversion clearing residual separately from opening capital', () => {
+    const { ledger } = makeLedger();
+    const usdt = (s: string) => parseAmount('USDT', s);
+    ledger.post(P.openingCapital({ sourceEventId: 'cap' }, H, btc('10')));
+    ledger.post(P.deposit({ sourceEventId: 'd' }, 'c', H, usdt('100')));
+    ledger.post(P.conversion({ sourceEventId: 'cv' }, { customerId: 'c', from: usdt('100'), to: btc('0.0015') }));
+    const r = reconcile({ transactions: [...ledger.transactions()] });
+    expect(r.ok).toBe(true);
+    const s = (a: AssetCode) => r.assets.find((x) => x.asset === a)!;
+    expect(s('USDT').conversionClearing).toBe(usdt('100').units);
+    expect(s('BTC').conversionClearing).toBe(-btc('0.0015').units);
+    expect(s('BTC').openingCapital).toBe(btc('10').units);
+    expect(s('USDT').openingCapital).toBe(0n);
+    expect(s('ETH').conversionClearing).toBe(0n);
+  });
+
+  it('customer↔customer trades leave no clearing residual', () => {
+    const { ledger } = makeLedger();
+    const usdt = (s: string) => parseAmount('USDT', s);
+    ledger.post(P.deposit({ sourceEventId: 'd1' }, 'b', H, usdt('100')));
+    ledger.post(P.deposit({ sourceEventId: 'd2' }, 's', H, btc('1')));
+    ledger.post(P.trade({ sourceEventId: 't' }, { buyerId: 'b', sellerId: 's', base: btc('0.001'), quote: usdt('65') }));
+    const r = reconcile({ transactions: [...ledger.transactions()] });
+    expect(r.assets.every((a) => a.conversionClearing === 0n)).toBe(true);
   });
 
   it('report is frozen', () => {

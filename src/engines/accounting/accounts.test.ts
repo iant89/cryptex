@@ -14,8 +14,8 @@ describe('chart of accounts', () => {
     ['revenue:withdrawal-fees', 'revenue', 'credit', 'revenue'],
     ['expense:network-fees', 'expense', 'debit', 'network-fee-expense'],
     ['equity:operational-reserves', 'equity', 'credit', 'operational-reserve-equity'],
-    ['equity:opening-capital', 'equity', 'credit', 'equity'],
-    ['equity:conversion-clearing', 'equity', 'credit', 'equity'],
+    ['equity:opening-capital', 'equity', 'credit', 'opening-capital'],
+    ['equity:conversion-clearing', 'equity', 'credit', 'conversion-clearing'],
   ])('%s', (id, type, side, category) => {
     const a = parseAccount(id);
     expect([a.type, a.normalSide, a.category]).toEqual([type, side, category]);

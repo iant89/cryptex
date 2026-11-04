@@ -16,24 +16,62 @@ const ACCOUNTS: AccountId[] = [
   Accounts.openingCapital, Accounts.conversionClearing,
 ];
 const accountArb = fc.constantFrom(...ACCOUNTS);
+const NON_CUSTOMER = ACCOUNTS.filter((a) => !a.startsWith('liability:customer:'));
+const nonCustomerArb = fc.constantFrom(...NON_CUSTOMER);
+const isCustomer = (k: string) => k.startsWith('liability:customer:');
 
 /** A random balanced transaction: per asset, a set of debits mirrored by credits. */
-const balancedEntries = fc
-  .array(fc.record({ asset: assetArb, units: unitsArb, from: accountArb, to: accountArb }), { minLength: 1, maxLength: 6 })
+const entriesFrom = (acct: fc.Arbitrary<AccountId>) => fc
+  .array(fc.record({ asset: assetArb, units: unitsArb, from: acct, to: acct }), { minLength: 1, maxLength: 6 })
   .map((legs) => legs.flatMap((l): Entry[] => [
     { accountId: l.to, asset: l.asset, side: 'debit', units: l.units },
     { accountId: l.from, asset: l.asset, side: 'credit', units: l.units },
   ]));
+/** Any accounts, including customer liabilities (may attempt overdrafts). */
+const balancedEntries = entriesFrom(accountArb);
+/** Exchange-side accounts only: never trips the customer overdraft guard. */
+const exchangeEntries = entriesFrom(nonCustomerArb);
 
 describe('ledger invariants (property-based)', () => {
-  it('N random balanced transactions: trial balance is 0 per asset and cache == fold', () => {
+  it('N random balanced transactions: trial balance 0, cache == fold, reconcile clean, no customer overdraft', () => {
     fc.assert(fc.property(fc.array(balancedEntries, { maxLength: 40 }), (txs) => {
       const { ledger } = makeLedger();
-      txs.forEach((entries, i) => ledger.post({ kind: 'adjustment', sourceEventId: `e${i}`, entries }));
+      txs.forEach((entries, i) => {
+        const before = ledger.size;
+        try {
+          ledger.post({ kind: 'adjustment', sourceEventId: `e${i}`, entries });
+        } catch (err) {
+          expect(err).toBeInstanceOf(LedgerError);
+          expect((err as LedgerError).code).toBe('INSUFFICIENT_CUSTOMER_BALANCE');
+          expect(ledger.size).toBe(before);
+        }
+      });
       for (const v of ledger.trialBalance().values()) expect(v).toBe(0n);
       expect(ledger.cachedBalances()).toEqual(foldBalances(ledger.transactions()));
       const r = reconcile({ transactions: [...ledger.transactions()], cachedBalances: ledger.cachedBalances() });
-      expect(r.discrepancies.filter((d) => d.kind !== 'negative-customer-balance')).toEqual([]);
+      expect(r.discrepancies).toEqual([]);
+    }));
+  });
+
+  it('a draft is rejected for overdraft iff some customer account would go negative (model check)', () => {
+    fc.assert(fc.property(fc.array(balancedEntries, { maxLength: 30 }), (txs) => {
+      const { ledger } = makeLedger();
+      txs.forEach((entries, i) => {
+        const model = foldBalances([...ledger.transactions(), { entries } as never]);
+        const wouldOverdraft = [...model].some(([k, v]) => isCustomer(k) && v < 0n);
+        let rejected = false;
+        try {
+          ledger.post({ kind: 'adjustment', sourceEventId: `e${i}`, entries });
+        } catch (err) {
+          rejected = true;
+          const e = err as LedgerError;
+          expect(e.code).toBe('INSUFFICIENT_CUSTOMER_BALANCE');
+          expect(e.details.shortfall! > 0n).toBe(true);
+          expect(isCustomer(e.details.accountId!)).toBe(true);
+        }
+        expect(rejected).toBe(wouldOverdraft);
+        for (const [k, v] of ledger.cachedBalances()) if (isCustomer(k)) expect(v >= 0n).toBe(true);
+      });
     }));
   });
 
@@ -48,7 +86,7 @@ describe('ledger invariants (property-based)', () => {
   });
 
   it('posting the same source event any number of times has the effect of posting once', () => {
-    fc.assert(fc.property(balancedEntries, fc.integer({ min: 1, max: 5 }), (entries, n) => {
+    fc.assert(fc.property(exchangeEntries, fc.integer({ min: 1, max: 5 }), (entries, n) => {
       const a = makeLedger().ledger;
       const b = makeLedger().ledger;
       a.post({ kind: 'adjustment', sourceEventId: 'e', entries });
@@ -59,7 +97,7 @@ describe('ledger invariants (property-based)', () => {
   });
 
   it('a reversal restores every balance to its prior value and keeps history', () => {
-    fc.assert(fc.property(fc.array(balancedEntries, { minLength: 1, maxLength: 10 }), fc.nat(), (txs, pick) => {
+    fc.assert(fc.property(fc.array(exchangeEntries, { minLength: 1, maxLength: 10 }), fc.nat(), (txs, pick) => {
       const { ledger } = makeLedger();
       const posted = txs.map((entries, i) => ledger.post({ kind: 'adjustment', sourceEventId: `e${i}`, entries }).transaction);
       const target = posted[pick % posted.length]!;

@@ -19,7 +19,8 @@ export type AccountCategory =
   | 'revenue'
   | 'network-fee-expense'
   | 'operational-reserve-equity'
-  | 'equity';
+  | 'opening-capital'
+  | 'conversion-clearing';
 
 export interface AccountInfo {
   readonly id: AccountId;
@@ -58,7 +59,10 @@ const PATTERNS: ReadonlyArray<[RegExp, (m: RegExpExecArray) => Omit<AccountInfo,
   [/^revenue:(trading-fees|withdrawal-fees)$/, () => ({ type: 'revenue', category: 'revenue' })],
   [/^expense:network-fees$/, () => ({ type: 'expense', category: 'network-fee-expense' })],
   [/^equity:operational-reserves$/, () => ({ type: 'equity', category: 'operational-reserve-equity' })],
-  [/^equity:(opening-capital|conversion-clearing)$/, () => ({ type: 'equity', category: 'equity' })],
+  [/^equity:opening-capital$/, () => ({ type: 'equity', category: 'opening-capital' })],
+  // Conversion clearing is equity with its own category so its residual is
+  // always reported separately (docs/phase1-plan.md §3.3).
+  [/^equity:conversion-clearing$/, () => ({ type: 'equity', category: 'conversion-clearing' })],
 ];
 
 export class UnknownAccountError extends Error {
@@ -105,6 +109,14 @@ export const Accounts = {
   networkFees: mk('expense:network-fees'),
   operationalReserves: mk('equity:operational-reserves'),
   openingCapital: mk('equity:opening-capital'),
-  /** Approved clearing account for cross-asset trades and conversions. */
+  /**
+   * Approved clearing account for cross-asset trades and conversions.
+   * Customer↔customer trades net it to zero per asset. Conversions against the
+   * exchange leave a per-asset residual: the exchange's own inventory position
+   * from conversions. Positive (credit) = the exchange took in more of that
+   * asset than it paid out (long); negative = it paid out more (short). It
+   * stays in equity (option b of the Batch 5 review) and is surfaced as
+   * `AssetSummary.conversionClearing`; it is never netted across assets or in USD.
+   */
   conversionClearing: mk('equity:conversion-clearing'),
 } as const;

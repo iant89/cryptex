@@ -33,7 +33,13 @@ export interface AssetSummary {
   readonly revenue: bigint;
   readonly networkFeeExpense: bigint;
   readonly operationalReserveEquity: bigint;
-  readonly otherEquity: bigint;
+  readonly openingCapital: bigint;
+  /**
+   * Residual in `equity:conversion-clearing` (credit-normal). Zero when only
+   * customer↔customer trades occurred; otherwise the exchange's per-asset
+   * inventory position from conversions. Reported, never netted or corrected.
+   */
+  readonly conversionClearing: bigint;
 }
 
 export interface ReconciliationInput {
@@ -98,13 +104,14 @@ export function reconcile(input: ReconciliationInput): ReconciliationReport {
       revenue: g('revenue'),
       networkFeeExpense: g('network-fee-expense'),
       operationalReserveEquity: g('operational-reserve-equity'),
-      otherEquity: g('equity'),
+      openingCapital: g('opening-capital'),
+      conversionClearing: g('conversion-clearing'),
     });
     assets.push(s);
     if (t.dr !== t.cr) discrepancies.push(d('trial-balance', asset, t.cr, t.dr));
     // Assets + Expenses = Liabilities + Revenue + Equity
     const lhs = s.blockchainAssets + s.operationalReserveAssets + s.networkFeeExpense;
-    const rhs = s.customerLiabilities + s.revenue + s.operationalReserveEquity + s.otherEquity;
+    const rhs = s.customerLiabilities + s.revenue + s.operationalReserveEquity + s.openingCapital + s.conversionClearing;
     if (lhs !== rhs) discrepancies.push(d('accounting-equation', asset, rhs, lhs));
   }
 

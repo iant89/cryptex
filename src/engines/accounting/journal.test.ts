@@ -140,3 +140,63 @@ describe('derived balances', () => {
     expect(() => new Ledger({ clock, ids }, [bad])).toThrow(LedgerError);
   });
 });
+
+describe('customer overdraft guard', () => {
+  const R = Accounts.customerReserved('c1');
+  const fail = (fn: () => unknown) => {
+    try { fn(); } catch (err) { return err as LedgerError; }
+    throw new Error('expected LedgerError');
+  };
+  it('rejects a draft that would take a customer account negative, with details', () => {
+    const { ledger } = makeLedger();
+    ledger.post(ok('dep', 100n));
+    const err = fail(() => ledger.post(draft('w', [e(C, 'debit', 150n), e(R, 'credit', 150n)])));
+    expect(err).toBeInstanceOf(LedgerError);
+    expect(err.code).toBe('INSUFFICIENT_CUSTOMER_BALANCE');
+    expect(err.details).toEqual({ accountId: C, asset: 'BTC', shortfall: 50n });
+    expect(ledger.size).toBe(1);
+    expect(ledger.balanceOf(C, 'BTC')).toBe(100n);
+  });
+  it('allows going exactly to zero, and nets multiple legs on one account', () => {
+    const { ledger } = makeLedger();
+    ledger.post(ok('dep', 100n));
+    ledger.post(draft('w', [e(C, 'debit', 100n), e(R, 'credit', 100n)]));
+    expect(ledger.balanceOf(C, 'BTC')).toBe(0n);
+    // debit 50 + credit 50 on the same empty account nets to 0: allowed
+    ledger.post(draft('n', [e(C, 'debit', 50n), e(C, 'credit', 50n)]));
+    expect(code(() => ledger.post(draft('x', [e(R, 'debit', 101n), e(C, 'credit', 101n)])))).toBe('INSUFFICIENT_CUSTOMER_BALANCE');
+  });
+  it('checks per asset', () => {
+    const { ledger } = makeLedger();
+    ledger.post(ok('dep', 100n));
+    expect(code(() => ledger.post(draft('x', [e(C, 'debit', 1n, 'ETH'), e(H, 'credit', 1n, 'ETH')])))).toBe('INSUFFICIENT_CUSTOMER_BALANCE');
+  });
+  it('blocks a reversal that would overdraw the customer', () => {
+    const { ledger } = makeLedger();
+    const dep = ledger.post(ok('dep', 100n)).transaction;
+    ledger.post(draft('w', [e(C, 'debit', 60n), e(R, 'credit', 60n)]));
+    const err = fail(() => ledger.reverse(dep.id, 'rev'));
+    expect(err.code).toBe('INSUFFICIENT_CUSTOMER_BALANCE');
+    expect(err.details.shortfall).toBe(60n);
+    expect(ledger.reversedBy(dep.id)).toBeUndefined();
+  });
+  it('exchange-side accounts may go negative (e.g. clearing short positions)', () => {
+    const { ledger } = makeLedger();
+    ledger.post(draft('x', [e(Accounts.conversionClearing, 'debit', 5n), e(H, 'credit', 5n)]));
+    expect(ledger.balanceOf(H, 'BTC')).toBe(-5n);
+  });
+});
+
+describe('history replay', () => {
+  it('rejects duplicate ids, duplicate sourceEventIds and out-of-order sequences', () => {
+    const { ledger, clock, ids } = makeLedger();
+    const a = ledger.post(ok('a')).transaction;
+    const b = ledger.post(ok('b')).transaction;
+    const load = (h: typeof a[]) => code(() => new Ledger({ clock, ids }, h));
+    expect(load([a, b])).toBe('NO_ERROR');
+    expect(load([a, { ...b, id: a.id }])).toBe('CORRUPT_HISTORY');
+    expect(load([a, { ...b, sourceEventId: 'a' }])).toBe('CORRUPT_HISTORY');
+    expect(load([b, a])).toBe('CORRUPT_HISTORY');
+    expect(load([a, { ...b, sequence: 5 }])).toBe('CORRUPT_HISTORY');
+  });
+});

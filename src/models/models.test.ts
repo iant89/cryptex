@@ -3,7 +3,7 @@ import {
   ASSETS, ASSET_CODES, getAsset, isAssetCode,
   amount, zero, add, sub, neg, compare, equals, isZero, isPositive, isNegative, sum,
   parseAmount, formatAmount, parseFixed, formatFixed, MixedAssetError, AmountFormatError,
-  USD_DECIMALS, USD_SCALE, usdPrice, parseUsd, formatUsd, valueInUsd,
+  USD_DECIMALS, USD_SCALE, usdPrice, roundDownToUsd, parseUsd, formatUsd, valueInUsd,
   type Amount, type UsdPrice,
 } from './index';
 
@@ -92,6 +92,13 @@ describe('USD fixed-point (8 decimals)', () => {
     expect(parseUsd('65000.12345678')).toBe(6_500_012_345_678n);
     expect(formatUsd(6_500_012_345_678n)).toBe('65000.12345678');
     expect(() => parseUsd('0.000000001')).toThrow(AmountFormatError);
+  });
+  it('roundDownToUsd is the single precision rule (toward zero)', () => {
+    expect(roundDownToUsd(199n, 100n)).toBe(1n);
+    expect(roundDownToUsd(200n, 100n)).toBe(2n);
+    expect(roundDownToUsd(0n, 7n)).toBe(0n);
+    expect(roundDownToUsd(-199n, 100n)).toBe(-1n);
+    expect(() => roundDownToUsd(1n, 0n)).toThrow(RangeError);
   });
   it('values amounts, truncating at 8 USD decimals', () => {
     const btc = usdPrice('BTC', parseUsd('65000'));

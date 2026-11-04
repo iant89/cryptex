@@ -27,10 +27,19 @@ export const parseUsd = (text: string): bigint => parseFixed(text, USD_DECIMALS)
 export const formatUsd = (usd: bigint): string => formatFixed(usd, USD_DECIMALS);
 
 /**
- * USD value of an amount at a price, truncated toward zero at the 8th USD
- * decimal (the domain's precision limit, not a display rounding).
+ * THE single USD precision rule for the domain: reduce an exact scaled product
+ * to USD fixed-point (8 decimals) by rounding toward zero (round-down for
+ * non-negative values; BigInt division semantics). Sub-1e-8 USD remainders are
+ * dropped. This is a precision limit, not display rounding; rounding to cents
+ * for display belongs to the UI. Every USD computation must go through here.
  */
+export function roundDownToUsd(numerator: bigint, denominator: bigint): bigint {
+  if (denominator <= 0n) throw new RangeError('denominator must be positive');
+  return numerator / denominator;
+}
+
+/** USD value of an amount at a price; precision per `roundDownToUsd`. */
 export function valueInUsd(a: Amount, price: UsdPrice): bigint {
   if (a.asset !== price.asset) throw new RangeError(`Price is for ${price.asset}, amount is ${a.asset}`);
-  return (a.units * price.usdPerUnit) / 10n ** BigInt(getAsset(a.asset).decimals);
+  return roundDownToUsd(a.units * price.usdPerUnit, 10n ** BigInt(getAsset(a.asset).decimals));
 }

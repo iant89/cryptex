@@ -36,6 +36,8 @@ describe('determinism guard (no ambient time/randomness/ids in domain code)', ()
     expect(await lint("import { Ledger } from '../core/state';\nexport { Ledger };\n", 'engines/x.ts')).toContain('no-restricted-imports');
     expect(await lint("import { a } from '../engines/accounting';\nexport { a };\n", 'models/x.ts')).toContain('no-restricted-imports');
     expect(await lint("import { a } from '../services/x';\nexport { a };\n", 'core/x.ts')).toContain('no-restricted-imports');
+    expect(await lint('export const t = Date.now();\n', 'core/x.tsx')).toContain('no-restricted-syntax');
+    expect(await lint("import { a } from '../core/x';\nexport { a };\n", 'engines/x.tsx')).toContain('no-restricted-imports');
     expect(await lint('export const ok = 1;\n', 'engines/x.ts')).toEqual([]);
   }, 30_000);
 });
