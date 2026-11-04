@@ -4,6 +4,8 @@ import { Pause, Zap } from 'lucide-react';
 import { ACTIVITY_ALERTS, SHELL_STATUS, type SimSpeed } from '../shellFixture';
 import { useActivityPanel } from '../providers/ActivityPanelContext';
 import { HOME_PATH } from '../navigation';
+import { ThemeToggle } from '../theme/ThemeToggle';
+import { useThemePreference } from '../theme/ThemePreference';
 
 const SPEED_ITEMS = [
   { value: 'pause', label: '', icon: <Pause size={12} aria-hidden />, ariaLabel: 'Pause' },
@@ -13,13 +15,9 @@ const SPEED_ITEMS = [
   { value: '100', label: '100×' },
 ];
 
-export interface AppHeaderProps {
-  /** Extra header actions (e.g. the theme toggle). */
-  extraActions?: React.ReactNode;
-  logoSrc?: string;
-}
-
-export function AppHeader({ extraActions, logoSrc = '/logo-dark.svg' }: AppHeaderProps) {
+export function AppHeader() {
+  const { theme } = useThemePreference();
+  const logoSrc = theme === 'dark' ? '/logo-dark.svg' : '/logo-light.svg';
   const [speed, setSpeed] = useState<SimSpeed>(SHELL_STATUS.speed);
   const activity = useActivityPanel();
   const { exchange, simulation } = SHELL_STATUS;
@@ -76,7 +74,7 @@ export function AppHeader({ extraActions, logoSrc = '/logo-dark.svg' }: AppHeade
             />
             <ButtonBadge design="overlay" text={String(ACTIVITY_ALERTS.length)} />
           </span>
-          {extraActions}
+          <ThemeToggle />
         </>
       }
     />
