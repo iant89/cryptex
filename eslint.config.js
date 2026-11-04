@@ -20,7 +20,7 @@ export default tseslint.config(
 
   // Determinism guard: domain code gets time, randomness and ids only from injected ports.
   {
-    files: ['src/models/**/*.ts', 'src/engines/**/*.ts', 'src/core/**/*.ts', 'src/services/**/*.ts'],
+    files: ['src/models/**/*.{ts,tsx}', 'src/engines/**/*.{ts,tsx}', 'src/core/**/*.{ts,tsx}', 'src/services/**/*.{ts,tsx}'],
     rules: {
       'no-restricted-syntax': [
         'error',
@@ -35,25 +35,25 @@ export default tseslint.config(
   },
   // Layer boundaries (docs/phase1-plan.md §2): dependencies point inward only.
   {
-    files: ['src/models/**/*.ts'],
+    files: ['src/models/**/*.{ts,tsx}'],
     rules: {
       'no-restricted-imports': ['error', { patterns: [{ group: ['**/engines/**', '**/core/**', '**/services/**', '**/modules/**', '**/components/**', '**/app/**', 'react', 'react-dom', 'idb'], message: 'models may not import other layers.' }] }],
     },
   },
   {
-    files: ['src/engines/**/*.ts'],
+    files: ['src/engines/**/*.{ts,tsx}'],
     rules: {
       'no-restricted-imports': ['error', { patterns: [{ group: ['**/core/**', '**/services/**', '**/modules/**', '**/components/**', '**/app/**', 'react', 'react-dom', 'idb'], message: 'engines may import models only.' }] }],
     },
   },
   {
-    files: ['src/core/**/*.ts'],
+    files: ['src/core/**/*.{ts,tsx}'],
     rules: {
       'no-restricted-imports': ['error', { patterns: [{ group: ['**/services/**', '**/modules/**', '**/components/**', '**/app/**', 'react', 'react-dom'], message: 'core may import models and engines only.' }] }],
     },
   },
   {
-    files: ['src/services/**/*.ts'],
+    files: ['src/services/**/*.{ts,tsx}'],
     rules: {
       'no-restricted-imports': ['error', { patterns: [{ group: ['**/modules/**', '**/components/**', '**/app/**', 'react', 'react-dom'], message: 'services may not import UI layers.' }] }],
     },
