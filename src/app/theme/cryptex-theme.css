@@ -49,3 +49,16 @@
   --cx-status-warning-text: var(--eui-color-warning-text);
   --cx-status-warning-subtle: var(--eui-color-warning-subtle);
 }
+
+/*
+ * ENTERPRISE-UI uses --eui-color-primary as text for secondary/tertiary
+ * buttons and the selected tab. On light, amber text fails AA, so these use
+ * selected-text (#B45309) instead (LAYOUT-SPEC rule; pending Ian's confirmation).
+ */
+[data-eui-theme='light'] .eui-Button-secondary:not(.eui-Button-neutral),
+[data-eui-theme='light'] .eui-Button-tertiary:not(.eui-Button-neutral) {
+  --_fg: var(--eui-color-selected-text);
+  --_fg-hover: var(--eui-color-selected-text);
+  --_border: var(--eui-color-selected-text);
+}
+[data-eui-theme='light'] .eui-Tabs-tab[aria-selected='true'] { color: var(--eui-color-selected-text); }
